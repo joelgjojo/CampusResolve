@@ -200,7 +200,7 @@ BEGIN
     NEW.id,
     COALESCE(NULLIF(NEW.raw_user_meta_data->>'full_name', ''), split_part(NEW.email, '@', 1)),
     NEW.email,
-    COALESCE(NULLIF(NEW.raw_user_meta_data->>'role', '')::user_role, 'student'::user_role),
+    'student'::user_role, -- ALWAYS default to student securely
     NULLIF(NEW.raw_user_meta_data->>'roll_number', ''),
     NULLIF(NEW.raw_user_meta_data->>'department', ''),
     CASE 
@@ -211,7 +211,7 @@ BEGIN
   ON CONFLICT (id) DO UPDATE SET
     full_name = EXCLUDED.full_name,
     email = EXCLUDED.email,
-    role = EXCLUDED.role;
+    role = profiles.role;
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'handle_new_user error: %', SQLERRM;
@@ -371,11 +371,18 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
+-- Safely retrieve user role without triggering RLS recursion
+CREATE OR REPLACE FUNCTION public.get_user_role(user_id UUID DEFAULT auth.uid())
+RETURNS public.user_role AS $$
+  SELECT role FROM public.profiles
+  WHERE id = user_id;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
 -- Profiles Policies
 CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id OR public.is_admin());
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id AND role = (SELECT role FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id AND role = public.get_user_role(auth.uid()));
 CREATE POLICY "Admins can manage profiles" ON profiles FOR ALL USING (public.is_admin());
-CREATE POLICY "Service and triggers can insert profiles" ON profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can insert own student profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id AND role = 'student');
 
 -- Issues Policies
 CREATE POLICY "Students can view own issues" ON issues FOR SELECT USING (reporter_id = auth.uid());
@@ -395,11 +402,12 @@ CREATE POLICY "Users can view status history" ON issue_status_history FOR SELECT
   EXISTS (
     SELECT 1 FROM issues
     WHERE issues.id = issue_status_history.issue_id
-    AND (issues.reporter_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'))
+    AND issues.reporter_id = auth.uid()
   )
+  OR public.is_admin()
 );
 CREATE POLICY "Admins and reporters can insert status history" ON issue_status_history FOR INSERT WITH CHECK (
-  auth.uid() = changed_by OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  auth.uid() = changed_by OR public.is_admin()
 );
 
 -- Confirmations Policies
@@ -525,6 +533,9 @@ ON CONFLICT (id) DO NOTHING;
 -- Admin:   admin1234
 -- ================================================================
 
+-- Safely clear any duplicate empty-string phone values
+UPDATE auth.users SET phone = NULL WHERE phone = '';
+
 -- Student demo user: student@campus.edu / demo1234
 INSERT INTO auth.users (
   id, instance_id, email, encrypted_password, email_confirmed_at,
@@ -541,7 +552,7 @@ VALUES (
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{"full_name":"Alex Rivera","role":"student","roll_number":"CS2024001","department":"Computer Science","year":3}'::jsonb,
   now(), now(), 'authenticated', 'authenticated',
-  '', '', '', '', '', '', '', false, false
+  '', '', '', '', '', NULL, '', false, false
 )
 ON CONFLICT (id) DO UPDATE SET
   encrypted_password = crypt('demo1234', gen_salt('bf')),
@@ -549,7 +560,8 @@ ON CONFLICT (id) DO UPDATE SET
   confirmation_token = COALESCE(auth.users.confirmation_token, ''),
   recovery_token = COALESCE(auth.users.recovery_token, ''),
   email_change_token_new = COALESCE(auth.users.email_change_token_new, ''),
-  email_change = COALESCE(auth.users.email_change, '');
+  email_change = COALESCE(auth.users.email_change, ''),
+  phone = NULLIF(auth.users.phone, '');
 
 INSERT INTO profiles (id, full_name, email, role, roll_number, department, year)
 VALUES (
@@ -579,7 +591,7 @@ VALUES (
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{"full_name":"Campus Operations Admin","role":"admin"}'::jsonb,
   now(), now(), 'authenticated', 'authenticated',
-  '', '', '', '', '', '', '', false, false
+  '', '', '', '', '', NULL, '', false, false
 )
 ON CONFLICT (id) DO UPDATE SET
   encrypted_password = crypt('admin1234', gen_salt('bf')),
@@ -587,7 +599,8 @@ ON CONFLICT (id) DO UPDATE SET
   confirmation_token = COALESCE(auth.users.confirmation_token, ''),
   recovery_token = COALESCE(auth.users.recovery_token, ''),
   email_change_token_new = COALESCE(auth.users.email_change_token_new, ''),
-  email_change = COALESCE(auth.users.email_change, '');
+  email_change = COALESCE(auth.users.email_change, ''),
+  phone = NULLIF(auth.users.phone, '');
 
 INSERT INTO profiles (id, full_name, email, role)
 VALUES (
