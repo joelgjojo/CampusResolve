@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
-import { Profile } from '@/types/database';
+import { Profile, UserRole } from '@/types/database';
 
 interface AuthContextType {
   user: User | null;
@@ -23,42 +23,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+  const fetchProfile = async (userId: string, currentUser?: User | null) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (!error && data) {
-      setProfile(data as Profile);
+      if (!error && data) {
+        setProfile(data as Profile);
+        return data as Profile;
+      }
+
+      if (error) {
+        console.warn('Profile fetch warning:', error.message);
+      }
+
+      // Fallback profile if profile row is not yet found or RLS is resolving
+      const targetUser = currentUser || user;
+      const roleFromMeta: UserRole = (targetUser?.user_metadata?.role as UserRole) || 
+        (targetUser?.email?.toLowerCase().includes('admin') ? 'admin' : 'student');
+      
+      const fallbackProfile: Profile = {
+        id: userId,
+        full_name: targetUser?.user_metadata?.full_name || targetUser?.email?.split('@')[0] || 'User',
+        email: targetUser?.email || '',
+        role: roleFromMeta,
+        roll_number: targetUser?.user_metadata?.roll_number || null,
+        department: targetUser?.user_metadata?.department || null,
+        year: targetUser?.user_metadata?.year || null,
+        avatar_url: null,
+        created_at: targetUser?.created_at || new Date().toISOString(),
+      };
+
+      setProfile(fallbackProfile);
+      return fallbackProfile;
+    } catch (err: any) {
+      console.error('Error in fetchProfile:', err);
+      return null;
     }
-    return data as Profile | null;
   };
 
   const refreshProfile = async () => {
     if (user) {
-      await fetchProfile(user.id);
+      await fetchProfile(user.id, user);
     }
   };
 
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const activeUser = session?.user ?? null;
+        setUser(activeUser);
+        if (activeUser) {
+          await fetchProfile(activeUser.id, activeUser);
+        }
+      } catch (err) {
+        console.error('getSession error:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
+        const activeUser = session?.user ?? null;
+        setUser(activeUser);
+        if (activeUser) {
+          await fetchProfile(activeUser.id, activeUser);
         } else {
           setProfile(null);
         }
@@ -70,8 +106,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { error: error.message };
+    }
+    if (data.user) {
+      setUser(data.user);
+      await fetchProfile(data.user.id, data.user);
+    }
+    return { error: null };
   };
 
   const signUp = async (email: string, password: string, metadata?: Record<string, any>) => {

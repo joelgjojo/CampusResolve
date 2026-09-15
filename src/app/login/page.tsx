@@ -24,30 +24,52 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await signIn(email, password);
+      // 1. Authenticate with Supabase
+      const { error: signInError } = await signIn(email.trim(), password);
+      if (signInError) {
+        throw new Error(signInError);
+      }
 
+      // 2. Verify user session
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        throw new Error('Failed to get user session');
+      if (userError) {
+        throw new Error(userError.message || 'Failed to retrieve authenticated session');
+      }
+      if (!userData?.user) {
+        throw new Error('Authentication session not found after sign in');
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userData.user.id)
-        .single();
+      // 3. Resolve user role: check profiles table, fallback to user_metadata or email convention
+      let role = userData.user.user_metadata?.role;
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userData.user.id)
+          .maybeSingle();
 
-      if (profileError) {
-        throw profileError;
+        if (profile?.role) {
+          role = profile.role;
+        } else if (profileError) {
+          console.warn('Profile fetch warning on login:', profileError.message);
+        }
+      } catch (pErr) {
+        console.warn('Profile query exception:', pErr);
       }
 
-      if (profile.role === 'admin') {
+      if (!role) {
+        role = email.toLowerCase().includes('admin') ? 'admin' : 'student';
+      }
+
+      // 4. Role-based redirect
+      if (role === 'admin') {
         router.push('/admin');
       } else {
         router.push('/student');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
+      console.error('Login failure:', err);
+      setError(err.message || 'Failed to sign in. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -72,7 +94,7 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm text-center">
+          <div className="mb-4 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm text-center leading-relaxed">
             {error}
           </div>
         )}
@@ -127,6 +149,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => {
+                setError('');
                 setEmail('student@campus.edu');
                 setPassword('demo1234');
               }}
@@ -137,6 +160,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => {
+                setError('');
                 setEmail('admin@campus.edu');
                 setPassword('admin1234');
               }}

@@ -16,20 +16,21 @@ const NAV_ITEMS = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { profile, loading, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && profile) {
-      if (profile.role !== 'admin') {
-        router.push('/student');
-      }
-    } else if (!loading && !profile) {
-      router.push('/login');
+    if (!loading && !user) {
+      router.replace('/login');
+      return;
     }
-  }, [profile, loading, router]);
+    if (!loading && profile && profile.role !== 'admin') {
+      router.replace('/student');
+      return;
+    }
+  }, [user, profile, loading, router]);
 
   if (loading || !profile || profile.role !== 'admin') {
     return (

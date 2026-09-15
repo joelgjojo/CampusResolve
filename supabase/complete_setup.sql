@@ -198,19 +198,26 @@ BEGIN
   INSERT INTO profiles (id, full_name, email, role, roll_number, department, year)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'full_name', ''), split_part(NEW.email, '@', 1)),
     NEW.email,
-    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'student'),
-    NEW.raw_user_meta_data->>'roll_number',
-    NEW.raw_user_meta_data->>'department',
-    (NEW.raw_user_meta_data->>'year')::integer
+    COALESCE(NULLIF(NEW.raw_user_meta_data->>'role', '')::user_role, 'student'::user_role),
+    NULLIF(NEW.raw_user_meta_data->>'roll_number', ''),
+    NULLIF(NEW.raw_user_meta_data->>'department', ''),
+    CASE 
+      WHEN (NEW.raw_user_meta_data->>'year') ~ '^[0-9]+$' THEN (NEW.raw_user_meta_data->>'year')::integer
+      ELSE NULL 
+    END
   )
   ON CONFLICT (id) DO UPDATE SET
     full_name = EXCLUDED.full_name,
+    email = EXCLUDED.email,
     role = EXCLUDED.role;
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'handle_new_user error: %', SQLERRM;
+  RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -355,23 +362,33 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Non-recursive helper for admin checks
+CREATE OR REPLACE FUNCTION public.is_admin(user_id UUID DEFAULT auth.uid())
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = user_id AND role = 'admin'
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
 -- Profiles Policies
-CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Admins can view all profiles" ON profiles FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id OR public.is_admin());
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id AND role = (SELECT role FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "Admins can manage profiles" ON profiles FOR ALL USING (public.is_admin());
+CREATE POLICY "Service and triggers can insert profiles" ON profiles FOR INSERT WITH CHECK (true);
 
 -- Issues Policies
 CREATE POLICY "Students can view own issues" ON issues FOR SELECT USING (reporter_id = auth.uid());
 CREATE POLICY "Students can view confirmed issues" ON issues FOR SELECT USING (EXISTS (SELECT 1 FROM issue_confirmations WHERE issue_id = issues.id AND user_id = auth.uid()));
-CREATE POLICY "Admins can view all issues" ON issues FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can view all issues" ON issues FOR SELECT USING (public.is_admin());
 CREATE POLICY "Students can create issues" ON issues FOR INSERT WITH CHECK (auth.uid() = reporter_id);
-CREATE POLICY "Admins can update issues" ON issues FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can update issues" ON issues FOR UPDATE USING (public.is_admin());
 CREATE POLICY "Students can verify own issues" ON issues FOR UPDATE USING (reporter_id = auth.uid() AND status = 'resolved') WITH CHECK (reporter_id = auth.uid() AND (status = 'verified' OR status = 'reopened'));
 
 -- Issue Images Policies
 CREATE POLICY "Authenticated users can view issue images" ON issue_images FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "Students can upload report images" ON issue_images FOR INSERT WITH CHECK (auth.uid() = uploaded_by);
-CREATE POLICY "Admins can upload any images" ON issue_images FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can upload any images" ON issue_images FOR INSERT WITH CHECK (public.is_admin());
 
 -- Status History Policies
 CREATE POLICY "Users can view status history" ON issue_status_history FOR SELECT USING (
@@ -392,9 +409,9 @@ CREATE POLICY "Students can confirm issues" ON issue_confirmations FOR INSERT WI
 -- Notes Policies
 CREATE POLICY "View notes" ON issue_notes FOR SELECT USING (
   (visibility = 'public' AND EXISTS (SELECT 1 FROM issues WHERE issues.id = issue_notes.issue_id AND issues.reporter_id = auth.uid()))
-  OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  OR public.is_admin()
 );
-CREATE POLICY "Admins can create notes" ON issue_notes FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can create notes" ON issue_notes FOR INSERT WITH CHECK (public.is_admin());
 CREATE POLICY "Students can create public notes on own issues" ON issue_notes FOR INSERT WITH CHECK (
   auth.uid() = author_id AND visibility = 'public' AND EXISTS (SELECT 1 FROM issues WHERE issues.id = issue_notes.issue_id AND issues.reporter_id = auth.uid())
 );
@@ -406,9 +423,9 @@ CREATE POLICY "System and admins can insert notifications" ON notifications FOR 
 
 -- Departments & Locations Policies
 CREATE POLICY "Authenticated can view departments" ON departments FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "Admins can manage departments" ON departments FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can manage departments" ON departments FOR ALL USING (public.is_admin());
 CREATE POLICY "Authenticated can view locations" ON locations FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "Admins can manage locations" ON locations FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can manage locations" ON locations FOR ALL USING (public.is_admin());
 
 -- ================================================================
 -- 5. STORAGE BUCKET FOR ISSUE IMAGES
@@ -502,7 +519,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- ================================================================
 -- 8. PRE-CONFIRMED DEMO ACCOUNTS
--- Creates demo accounts directly in auth.users and profiles
+-- Creates demo accounts directly in auth.users, auth.identities, and profiles
 -- Passwords:
 -- Student: demo1234
 -- Admin:   admin1234
@@ -511,7 +528,9 @@ ON CONFLICT (id) DO NOTHING;
 -- Student demo user: student@campus.edu / demo1234
 INSERT INTO auth.users (
   id, instance_id, email, encrypted_password, email_confirmed_at,
-  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  phone_change, phone, reauthentication_token, is_sso_user, is_anonymous
 )
 VALUES (
   'e0000000-0000-0000-0000-000000000001',
@@ -521,11 +540,16 @@ VALUES (
   now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{"full_name":"Alex Rivera","role":"student","roll_number":"CS2024001","department":"Computer Science","year":3}'::jsonb,
-  now(), now(), 'authenticated', 'authenticated'
+  now(), now(), 'authenticated', 'authenticated',
+  '', '', '', '', '', '', '', false, false
 )
 ON CONFLICT (id) DO UPDATE SET
   encrypted_password = crypt('demo1234', gen_salt('bf')),
-  email_confirmed_at = now();
+  email_confirmed_at = now(),
+  confirmation_token = COALESCE(auth.users.confirmation_token, ''),
+  recovery_token = COALESCE(auth.users.recovery_token, ''),
+  email_change_token_new = COALESCE(auth.users.email_change_token_new, ''),
+  email_change = COALESCE(auth.users.email_change, '');
 
 INSERT INTO profiles (id, full_name, email, role, roll_number, department, year)
 VALUES (
@@ -542,7 +566,9 @@ ON CONFLICT (id) DO UPDATE SET role = 'student', full_name = 'Alex Rivera';
 -- Admin demo user: admin@campus.edu / admin1234
 INSERT INTO auth.users (
   id, instance_id, email, encrypted_password, email_confirmed_at,
-  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  phone_change, phone, reauthentication_token, is_sso_user, is_anonymous
 )
 VALUES (
   'e0000000-0000-0000-0000-000000000002',
@@ -552,11 +578,16 @@ VALUES (
   now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{"full_name":"Campus Operations Admin","role":"admin"}'::jsonb,
-  now(), now(), 'authenticated', 'authenticated'
+  now(), now(), 'authenticated', 'authenticated',
+  '', '', '', '', '', '', '', false, false
 )
 ON CONFLICT (id) DO UPDATE SET
   encrypted_password = crypt('admin1234', gen_salt('bf')),
-  email_confirmed_at = now();
+  email_confirmed_at = now(),
+  confirmation_token = COALESCE(auth.users.confirmation_token, ''),
+  recovery_token = COALESCE(auth.users.recovery_token, ''),
+  email_change_token_new = COALESCE(auth.users.email_change_token_new, ''),
+  email_change = COALESCE(auth.users.email_change, '');
 
 INSERT INTO profiles (id, full_name, email, role)
 VALUES (
@@ -566,6 +597,30 @@ VALUES (
   'admin'
 )
 ON CONFLICT (id) DO UPDATE SET role = 'admin', full_name = 'Campus Operations Admin';
+
+-- Ensure auth.identities exist for both demo accounts
+INSERT INTO auth.identities (
+  id,
+  user_id,
+  identity_data,
+  provider,
+  provider_id,
+  last_sign_in_at,
+  created_at,
+  updated_at
+)
+SELECT
+  id,
+  id,
+  jsonb_build_object('sub', id::text, 'email', email),
+  'email',
+  id::text,
+  now(),
+  now(),
+  now()
+FROM auth.users
+WHERE email IN ('student@campus.edu', 'admin@campus.edu')
+ON CONFLICT (provider, provider_id) DO NOTHING;
 
 -- ================================================================
 -- 9. SEED REALISTIC DEMO ISSUES
