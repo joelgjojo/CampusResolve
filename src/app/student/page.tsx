@@ -14,23 +14,26 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import PriorityBadge from '@/components/ui/PriorityBadge';
 
 export default function StudentHome() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const router = useRouter();
   const supabase = createClient();
   const [stats, setStats] = useState({ open: 0, inProgress: 0, resolved: 0, total: 0 });
   const [recentIssues, setRecentIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
+  const userId = profile?.id || user?.id;
 
-  const fetchDashboard = async () => {
+  useEffect(() => {
+    if (!userId) return;
+    fetchDashboard(userId);
+  }, [userId]);
+
+  const fetchDashboard = async (uid: string) => {
     try {
       const { data: issues } = await supabase
         .from('issues')
         .select('*, location:locations(*), department:departments(*)')
-        .eq('reporter_id', profile?.id)
+        .eq('reporter_id', uid)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -49,19 +52,19 @@ export default function StudentHome() {
       const { count: totalOpen } = await supabase
         .from('issues')
         .select('*', { count: 'exact', head: true })
-        .eq('reporter_id', profile?.id)
+        .eq('reporter_id', uid)
         .in('status', ['reported', 'acknowledged', 'assigned', 'reopened']);
 
       const { count: totalInProgress } = await supabase
         .from('issues')
         .select('*', { count: 'exact', head: true })
-        .eq('reporter_id', profile?.id)
+        .eq('reporter_id', uid)
         .eq('status', 'in_progress');
 
       const { count: totalResolved } = await supabase
         .from('issues')
         .select('*', { count: 'exact', head: true })
-        .eq('reporter_id', profile?.id)
+        .eq('reporter_id', uid)
         .in('status', ['resolved', 'verified']);
 
       setStats({

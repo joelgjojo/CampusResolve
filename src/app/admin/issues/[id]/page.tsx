@@ -12,7 +12,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const StatusBadge = ({ status }: { status: keyof typeof STATUS_CONFIG }) => {
-  const config = STATUS_CONFIG[status];
+  const config = (status && STATUS_CONFIG[status]) || { label: status || 'Unknown', bgColor: 'bg-slate-100', textColor: 'text-slate-600' };
   return (
     <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${config.bgColor} ${config.textColor}`}>
       {config.label}
@@ -187,7 +187,7 @@ export default function IssueDetailPage() {
       await supabase.from('notifications').insert({
         user_id: issue.reporter_id,
         title: `Issue Status Updated`,
-        message: `Your issue ${issue.human_id} is now ${STATUS_CONFIG[newStatus as keyof typeof STATUS_CONFIG].label}`,
+        message: `Your issue ${issue.human_id} is now ${STATUS_CONFIG[newStatus as keyof typeof STATUS_CONFIG]?.label || newStatus}`,
         issue_id: id
       });
     }

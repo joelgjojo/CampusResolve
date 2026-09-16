@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 
 const StatusBadge = ({ status }: { status: keyof typeof STATUS_CONFIG }) => {
-  const config = STATUS_CONFIG[status];
+  const config = (status && STATUS_CONFIG[status]) || { label: status || 'Unknown', bgColor: 'bg-slate-100', textColor: 'text-slate-600' };
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.bgColor} ${config.textColor}`}>
       {config.label}
@@ -19,7 +19,7 @@ const StatusBadge = ({ status }: { status: keyof typeof STATUS_CONFIG }) => {
 };
 
 const PriorityBadge = ({ priority }: { priority: keyof typeof PRIORITY_CONFIG }) => {
-  const config = PRIORITY_CONFIG[priority];
+  const config = (priority && PRIORITY_CONFIG[priority]) || { label: priority || 'Medium', bgColor: 'bg-amber-50', textColor: 'text-amber-700' };
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.bgColor} ${config.textColor}`}>
       {config.label}
