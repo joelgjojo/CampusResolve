@@ -74,12 +74,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
-      {/* Top Bar - Mobile */}
+      {/* Top Bar */}
       <header className="sticky top-0 z-50 glass border-b border-slate-200/50">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Image src="/images/logo.png" alt="CampusResolve" width={140} height={36} className="h-8 w-auto" />
-          </div>
+        <div className="max-w-lg md:max-w-4xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
+          <Link href="/student" className="flex items-center gap-2">
+            <Image src="/images/logo.png" alt="CampusResolve" width={140} height={36} className="h-8 md:h-9 w-auto" />
+          </Link>
           <div className="flex items-center gap-2">
             <Link
               href="/student/notifications"
@@ -104,7 +104,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       </header>
 
       {/* Main Content */}
-      <main className="max-w-lg mx-auto px-4 py-4">
+      <main className="max-w-lg md:max-w-4xl mx-auto px-4 md:px-6 py-4 md:py-6">
         {children}
       </main>
 

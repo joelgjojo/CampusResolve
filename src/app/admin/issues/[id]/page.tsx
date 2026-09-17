@@ -313,21 +313,39 @@ export default function IssueDetailPage() {
           {/* Priority Explanation */}
           <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-sm p-6">
             <h3 className="text-lg font-bold text-navy-900 mb-4 flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-red-500" /> Why {PRIORITY_CONFIG[issue.priority]?.label}?
+              <ShieldAlert className="h-5 w-5 text-red-500" /> Why {PRIORITY_CONFIG[issue.priority]?.label || issue.priority}?
             </h3>
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              <p className="text-sm text-slate-600 mb-2">
-                Priority Score: <span className="font-bold text-slate-900">{issue.priority_score}</span>
-              </p>
-              <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
-                {issue.impact_flags.map(flagId => {
-                   const flag = IMPACT_FLAGS.find(f => f.id === flagId);
-                   return flag ? <li key={flag.id}>{flag.label} (+{flag.score})</li> : null;
-                })}
-                {issue.confirmation_count > 0 && (
-                  <li>Confirmed by {issue.confirmation_count} students (+{issue.confirmation_count * 2} max)</li>
-                )}
-              </ul>
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
+              <div>
+                <p className="text-sm text-slate-600 mb-2">
+                  Priority Score: <span className="font-bold text-slate-900">{issue.priority_score}</span>
+                  <span className="text-xs text-slate-400 ml-2">
+                    (≥7 Critical · ≥5 High · ≥3 Medium · &lt;3 Low)
+                  </span>
+                </p>
+                <p className="text-xs text-slate-500 mb-2">Based on impact flags selected at report time:</p>
+                <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
+                  {issue.impact_flags && issue.impact_flags.length > 0 ? (
+                    issue.impact_flags.map((flagId: string) => {
+                      const flag = IMPACT_FLAGS.find(f => f.id === flagId);
+                      return flag ? <li key={flag.id}>{flag.label} <span className="text-teal-700 font-medium">(+{flag.score})</span></li> : null;
+                    })
+                  ) : (
+                    <li className="text-slate-400">No impact flags selected</li>
+                  )}
+                </ul>
+              </div>
+              {issue.confirmation_count > 0 && (
+                <div className="pt-2 border-t border-slate-200">
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium text-slate-700">Community confirmations:</span>{' '}
+                    {issue.confirmation_count} student{issue.confirmation_count !== 1 ? 's' : ''} confirmed this issue.
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Confirmations help validate the report but are not included in the priority score.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

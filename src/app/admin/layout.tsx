@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -21,6 +21,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  const closeMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
+
   useEffect(() => {
     if (!loading && !user) {
       router.replace('/login');
@@ -31,6 +33,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
   }, [user, profile, loading, router]);
+
+  // Close mobile menu on Escape key
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMobileMenu();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileMenuOpen, closeMobileMenu]);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    closeMobileMenu();
+  }, [pathname, closeMobileMenu]);
 
   if (loading || !profile || profile.role !== 'admin') {
     return (
@@ -72,7 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     ? 'bg-teal-50 text-teal-700'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                 )}
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={closeMobileMenu}
               >
                 <Icon className={cn('h-5 w-5', isActive ? 'text-teal-600' : 'text-slate-400')} />
                 {item.name}
@@ -112,7 +129,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           />
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            aria-label="Open admin navigation"
+            aria-expanded={isMobileMenuOpen}
           >
             <Menu className="h-6 w-6" />
           </button>
@@ -127,18 +146,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm md:hidden"
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={closeMobileMenu}
               />
               <motion.aside
                 initial={{ x: '-100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-                className="fixed inset-y-0 left-0 z-50 w-64 bg-white md:hidden"
+                className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl md:hidden"
+                role="dialog"
+                aria-label="Admin navigation menu"
               >
                 <button
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="absolute right-4 top-4 rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                  onClick={closeMobileMenu}
+                  className="absolute right-4 top-4 rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  aria-label="Close admin navigation"
                 >
                   <X className="h-6 w-6" />
                 </button>
@@ -149,7 +171,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
           {children}
         </main>
       </div>

@@ -93,16 +93,16 @@ export default function AnalyticsPage() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-navy-900">Analytics & Insights</h1>
-          <p className="text-slate-500">Track and analyze campus issues</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-navy-900">Analytics & Insights</h1>
+          <p className="text-sm sm:text-base text-slate-500">Track and analyze campus issues</p>
         </div>
         
-        <div className="flex items-center gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-200">
+        <div className="flex items-center gap-1.5 sm:gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-200 self-start sm:self-auto">
           {['week', 'month', 'all'].map((p) => (
             <button
               key={p}
               onClick={() => setTimePeriod(p)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg capitalize transition-colors ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg capitalize transition-colors ${
                 timePeriod === p ? 'bg-teal-50 text-teal-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
@@ -121,20 +121,20 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Category Chart */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white/70 backdrop-blur-xl p-6 rounded-2xl border border-white/20 shadow-sm"
+              className="bg-white/70 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-white/20 shadow-sm"
             >
-              <h3 className="text-lg font-bold text-navy-900 mb-6">Issues by Category</h3>
-              <div className="h-72">
+              <h3 className="text-base sm:text-lg font-bold text-navy-900 mb-4 sm:mb-6">Issues by Category</h3>
+              <div className="h-56 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={categoryData} layout="vertical" margin={{ left: 20 }}>
+                  <BarChart data={categoryData} layout="vertical" margin={{ left: 10, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                     <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                    <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} />
                     <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                       {categoryData.map((entry, index) => (
@@ -151,18 +151,18 @@ export default function AnalyticsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white/70 backdrop-blur-xl p-6 rounded-2xl border border-white/20 shadow-sm"
+              className="bg-white/70 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-white/20 shadow-sm"
             >
-              <h3 className="text-lg font-bold text-navy-900 mb-6">Issue Status Distribution</h3>
-              <div className="h-72">
+              <h3 className="text-base sm:text-lg font-bold text-navy-900 mb-4 sm:mb-6">Issue Status Distribution</h3>
+              <div className="h-56 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={statusData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={80}
-                      outerRadius={110}
+                      innerRadius={60}
+                      outerRadius={85}
                       paddingAngle={2}
                       dataKey="value"
                     >
@@ -171,42 +171,42 @@ export default function AnalyticsPage() {
                       ))}
                     </Pie>
                     <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </motion.div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Hotspots Insight */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white/70 backdrop-blur-xl p-6 rounded-2xl border border-white/20 shadow-sm"
+              className="bg-white/70 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-white/20 shadow-sm"
             >
-              <div className="flex items-center gap-2 mb-6">
-                <AlertTriangle className="h-6 w-6 text-amber-500" />
-                <h3 className="text-lg font-bold text-navy-900">Recurring Hotspots</h3>
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500" />
+                <h3 className="text-base sm:text-lg font-bold text-navy-900">Recurring Hotspots</h3>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {hotspots.length === 0 ? (
                   <p className="text-slate-500 text-center py-4">No significant hotspots identified.</p>
                 ) : (
                   hotspots.map((spot, idx) => (
                     <div 
                       key={idx} 
-                      className={`p-4 rounded-xl border ${spot.count >= 3 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}
+                      className={`p-3 sm:p-4 rounded-xl border ${spot.count >= 3 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <span className="font-semibold text-slate-900">{spot.locName}</span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${spot.count >= 3 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-700'}`}>
+                        <span className="font-semibold text-sm sm:text-base text-slate-900">{spot.locName}</span>
+                        <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-bold ${spot.count >= 3 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-700'}`}>
                           {spot.count} Issues
                         </span>
                       </div>
-                      <p className="text-sm text-slate-600">
+                      <p className="text-xs sm:text-sm text-slate-600">
                         {spot.count >= 3 
                           ? `${spot.count} ${CATEGORY_CONFIG[spot.category as keyof typeof CATEGORY_CONFIG]?.label || spot.category} reports in ${spot.locName} this ${timePeriod}. Consider inspecting underlying infrastructure.`
                           : `Normal volume of reports for this area.`}
@@ -222,22 +222,22 @@ export default function AnalyticsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="bg-white/70 backdrop-blur-xl p-6 rounded-2xl border border-white/20 shadow-sm"
+              className="bg-white/70 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border border-white/20 shadow-sm"
             >
-              <div className="flex items-center gap-2 mb-6">
-                <TrendingUp className="h-6 w-6 text-blue-500" />
-                <h3 className="text-lg font-bold text-navy-900">Department Backlogs</h3>
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500" />
+                <h3 className="text-base sm:text-lg font-bold text-navy-900">Department Backlogs</h3>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {deptBacklog.length === 0 ? (
                   <p className="text-slate-500 text-center py-4">No pending department backlogs.</p>
                 ) : (
                   deptBacklog.map((dept, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="font-medium text-slate-700">{dept.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl font-bold text-navy-900">{dept.count}</span>
+                    <div key={idx} className="flex items-center justify-between p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="font-medium text-sm sm:text-base text-slate-700">{dept.name}</span>
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <span className="text-xl sm:text-2xl font-bold text-navy-900">{dept.count}</span>
                         <span className="text-xs text-slate-500">Open</span>
                       </div>
                     </div>
